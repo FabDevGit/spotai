@@ -10,6 +10,17 @@
   let currentTrack = '';
   let isSkipping = false;
 
+  function getTrackFromMediaSession() {
+    const metadata = navigator.mediaSession && navigator.mediaSession.metadata;
+    if (!metadata) return null;
+
+    const artist = (metadata.artist || '').trim();
+    const track = (metadata.title || '').trim();
+    if (!artist || !track) return null;
+
+    return { artist, track };
+  }
+
   // Get current track info from Spotify's web player
   function getCurrentTrack() {
     // Method 1: Now playing bar (most reliable)
@@ -51,6 +62,10 @@
         };
       }
     }
+
+    // Fallback: Media Session metadata
+    const mediaSessionTrack = getTrackFromMediaSession();
+    if (mediaSessionTrack) return mediaSessionTrack;
 
     return null;
   }
