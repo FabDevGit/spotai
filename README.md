@@ -47,6 +47,8 @@ Base URL: `https://spot-the-ai.com`
 
 PRs welcome! Please test on both Spotify and Deezer web players before submitting.
 
+Thanks to https://souloverai.com/ and https://github.com/CennoxX/spotify-ai-blocker for maintaining lists of AI artists
+
 ## License
 
 MIT
