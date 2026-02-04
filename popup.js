@@ -44,17 +44,36 @@ async function updateCurrentTrack() {
   console.log('Updating current track...');
 
   try {
-    // Find the music tab
-    const tabs = await chrome.tabs.query({});
-    console.log('Found tabs:', tabs.length);
+    const isSupportedMusicUrl = (url) => {
+      if (!url) return false;
+      return (
+        url.includes('open.spotify.com') ||
+        url.includes('deezer.com') ||
+        url.includes('music.youtube.com')
+      );
+    };
 
-    const musicTab = tabs.find(t => t.url && (
-      t.url.includes('open.spotify.com') ||
-      t.url.includes('deezer.com') ||
-      t.url.includes('music.youtube.com')
-    ));
+    // Prefer the active tab
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-    console.log('Music tab:', musicTab?.id, musicTab?.url);
+    let musicTab = null;
+    if (activeTab && isSupportedMusicUrl(activeTab.url)) {
+      musicTab = activeTab;
+    } else {
+      const currentWindowTabs = await chrome.tabs.query({ currentWindow: true });
+      const supportedInWindow = currentWindowTabs.filter(t => isSupportedMusicUrl(t.url));
+      musicTab = supportedInWindow.find(t => t.audible) ||
+        supportedInWindow.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0))[0];
+
+      if (!musicTab) {
+        const allTabs = await chrome.tabs.query({});
+        const supportedAll = allTabs.filter(t => isSupportedMusicUrl(t.url));
+        musicTab = supportedAll.find(t => t.audible) ||
+          supportedAll.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0))[0];
+      }
+    }
+
+    console.log('Selected music tab:', musicTab?.id, musicTab?.url);
 
     if (!musicTab) {
       console.log('No music tab found');
@@ -66,8 +85,24 @@ async function updateCurrentTrack() {
 
     // Send message directly to the tab
     console.log('Sending message to tab...');
-    const response = await chrome.tabs.sendMessage(musicTab.id, { action: 'getCurrentArtist' });
-    console.log('Response:', response);
+    let response;
+    try {
+      response = await chrome.tabs.sendMessage(musicTab.id, { action: 'getCurrentArtist' });
+      console.log('Response:', response);
+    } catch (e) {
+      const msg = (e && e.message) ? e.message : String(e);
+      console.log('Error sending message:', msg);
+      if (msg.includes('Receiving end does not exist') || msg.includes('Could not establish connection')) {
+        currentArtist = '';
+        currentTabId = musicTab.id;
+        document.getElementById('currentArtist').textContent = 'Music tab detected, but not connected';
+        document.getElementById('currentArtist').classList.add('no-track');
+        document.getElementById('currentTrack').textContent = 'Refresh the music page and reopen this popup';
+        document.getElementById('blockBtn').disabled = true;
+        return;
+      }
+      throw e;
+    }
 
     if (response && response.artist) {
       currentArtist = response.artist;
